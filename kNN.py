@@ -137,7 +137,8 @@ for k in range(1, len(points)):
     for batch_count in range(2, len(points) - 1):
         metrics = categorize_all(points, batch_count, k)
         f_measure = metrics.f_measure()
+        if f_measure > max_f_measure or k % 10 == 0 and batch_count == len(points) - 2:
+            print("%.1f%%" % (100 * (k + 1) / len(points)))
         if f_measure > max_f_measure:
             max_f_measure = f_measure
             print("k=%d, batch_count=%d, F=%f\n%s\n" % (k, batch_count, f_measure, metrics))
-            print("%.1f%%" % (100 * (k + 1) / len(points)))
