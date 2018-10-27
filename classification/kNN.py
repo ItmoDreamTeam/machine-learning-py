@@ -1,7 +1,5 @@
 import csv
 import random
-import multiprocessing
-from matplotlib import pyplot
 
 
 class Point:
