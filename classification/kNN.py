@@ -32,6 +32,9 @@ class Metrics:
         self.true_values.append(true_value)
         self.computed_values.append(computed_value)
 
+    def margins(self) -> [int]:
+        return [0 if self.true_values[i] == self.computed_values[i] else 1 for i in range(len(self.true_values))]
+
     def accuracy(self) -> float:
         return sum(self.true_values[i] == self.computed_values[i] for i in range(len(self.true_values))) \
                / len(self.true_values)
