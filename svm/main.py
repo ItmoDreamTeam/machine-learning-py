@@ -7,145 +7,103 @@ from cvxopt import solvers as cvxopt_solvers
 from classification.kNN import Metrics
 from classification.kNN import read_dataset
 
-X_LEFT = -0.5
-X_RIGHT = 2
-Y_UP = 2
-Y_DOWN = -0.5
+# Variables' ranges
+X_FROM, X_TO = -0.1, 1.5
+Y_FROM, Y_TO = -0.1, 1.5
 
 
-def show_points(points):
+def plot_points(points, title):
+    plt.title(title)
     for point in points:
-        if point.category == 0:
-            plt.plot(point.x, point.y, "go")
-        else:
-            plt.plot(point.x, point.y, "co")
+        plt.plot(point.x, point.y, "xr" if point.category else ".b")
     plt.show()
-
-
-def linear_kernel(x1, x2):
-    return np.dot(x1, x2)
-
-
-def poly_kernel(x1, x2):
-    return (1 + np.dot(x1, x2)) ** 2
-
-
-def rbf_kernel(x1, x2):
-    distance = np.sqrt(np.sum((x1 - x2) ** 2))
-    return np.exp(-(distance ** 2 / 2))
 
 
 # Read dataset
 points = read_dataset("../classification/chips1.csv")
-show_points(points)
+plot_points(points, "Original data")
 
-# Apply some transform
+# Transform
 for point in points:
     point.x **= 2
     point.y **= 2
-show_points(points)
+plot_points(points, "Squared data")
 
-# Data set
-x_neg = np.array([[point.x, point.y] for point in points if not point.category])
-y_neg = np.array([-1 for i in x_neg])
-x_pos = np.array([[point.x, point.y] for point in points if point.category])
-y_pos = np.array([1 for i in x_pos])
-x1 = np.linspace(X_LEFT, X_RIGHT)
-x = np.vstack((np.linspace(X_LEFT, X_RIGHT), np.linspace(X_LEFT, X_RIGHT)))
-X = np.vstack((x_pos, x_neg))
-y = np.concatenate((y_pos, y_neg))
+# Split to X and y
+X = np.array([[point.x, point.y] for point in points])
+y = np.array([1 if point.category else -1 for point in points])
 
-fig = plt.figure(figsize=(10, 10))
-plt.scatter(x_neg[:, 0], x_neg[:, 1], marker='x', color='r', label='Negative -1')
-plt.scatter(x_pos[:, 0], x_pos[:, 1], marker='o', color='b', label='Positive +1')
-plt.xlim(X_LEFT, X_RIGHT)
-plt.ylim(Y_DOWN, Y_UP)
-plt.xticks(np.arange(X_LEFT, X_RIGHT, step=1))
-plt.yticks(np.arange(Y_DOWN, Y_UP, step=1))
-
-# Lines
-plt.axvline(0, color='black', alpha=.5)
-plt.axhline(0, color='black', alpha=.5)
-
-plt.xlabel('$x_1$')
-plt.ylabel('$x_2$')
-
-plt.legend(loc='lower right')
-# plt.show()
-
-
-### SOLUTION ###
-# Initializing values and computing H. Note the 1. to force to float type
+# Prepare solver
 C = 10
-m, n = X.shape
+elements_number = X.shape[0]
 y = y.reshape(-1, 1) * 1.
 X_dash = y * X
-
-
-# H = np.dot(X_dash, X_dash.T) * 1.
-
-def make_kernel_tricks(kernel):
-    n_samples = len(points)
-    kernel_matrix = np.zeros((n_samples, n_samples))
-    for i in range(n_samples):
-        for j in range(n_samples):
-            kernel_matrix[i, j] = kernel(X[i], X[j])
-    return kernel_matrix
-
-
-H = make_kernel_tricks(linear_kernel)
-
-# Converting into cvxopt format - as previously
-P = cvxopt_matrix(np.outer(y, y) * H, tc='d')
-q = cvxopt_matrix(-np.ones((m, 1)))
-G = cvxopt_matrix(np.vstack((np.eye(m) * -1, np.eye(m))))
-h = cvxopt_matrix(np.hstack((np.zeros(m), np.ones(m) * C)))
+H = np.dot(X_dash, X_dash.T) * 1.
+P = cvxopt_matrix(H)
+q = cvxopt_matrix(-np.ones((elements_number, 1)))
+G = cvxopt_matrix(np.vstack((np.eye(elements_number) * -1, np.eye(elements_number))))
+h = cvxopt_matrix(np.hstack((np.zeros(elements_number), np.ones(elements_number) * C)))
 A = cvxopt_matrix(y.reshape(1, -1))
 b = cvxopt_matrix(np.zeros(1))
 
 # Run solver
 sol = cvxopt_solvers.qp(P, q, G, h, A, b)
 alphas = np.array(sol['x'])
-
-# ==================Computing and printing parameters===============================#
 w = ((y * alphas).T @ X).reshape(-1, 1)
 S = (alphas > 1e-4).flatten()
 b = y[S] - np.dot(X[S], w)
 
-# Display results
-print('Alphas = ', alphas[alphas > 1e-4])
+print("\nResults")
+# print('Alphas = ', alphas[alphas > 1e-4])
 print('w = ', w.flatten())
 print('b = ', b[0])
 
-# Display results
+# Visualize results
+plt.figure(figsize=(10, 10))
+
+# Points
+for point in points:
+    plt.plot(point.x, point.y, "xr" if point.category else ".b")
+
+# Separating line
+x1 = np.linspace(X_FROM, X_TO)
 plt.plot(x1, - w[0] / w[1] * x1 - b[0] / w[1], color='darkblue')
+
+plt.xlim(X_FROM, X_TO)
+plt.ylim(Y_FROM, Y_TO)
+plt.axvline(0, color='black')
+plt.axhline(0, color='black')
 plt.show()
 
-clf = SVC(C=10, kernel='linear')
-clf.fit(X, y.ravel())
+# Compare with SkLearn
+svc = SVC(C=C, kernel='linear')
+svc.fit(X, y.ravel())
 
-print("*********")
-print('w = ', clf.coef_)
-print('b = ', clf.intercept_)
-print('Indices of support vectors = ', clf.support_)
-print('Support vectors = ', clf.support_vectors_)
-print('Number of support vectors for each class = ', clf.n_support_)
-print('Coefficients of the support vector in the decision function = ', np.abs(clf.dual_coef_))
+print("\nSkLearn")
+print('w = ', svc.coef_)
+print('b = ', svc.intercept_)
+# print('Indices of support vectors = ', svc.support_)
+# print('Support vectors = ', svc.support_vectors_)
+# print('Number of support vectors for each class = ', svc.n_support_)
+# print('Coefficients of the support vector in the decision function = ', np.abs(svc.dual_coef_))
 
-etalon = clf.predict(X)
+# Calculate metrics
+our_metrics = Metrics()
+sklearn_metrics = Metrics()
+sklearn_prediction = [e > 0 for e in svc.predict(X)]
+for index, point in enumerate(points):
+    our_prediction = point.x * w[0] + point.y * w[1] + b[0] > 0
+    our_metrics.add(point.category, our_prediction)
+    sklearn_metrics.add(point.category, sklearn_prediction[index])
 
-metrics = Metrics()
-etalon_metrics = Metrics()
-for i, p in enumerate(points):
-    predicted = p.x * w[0] + p.y * w[1] + b[0] > 0
-    etalon_predicted = etalon[i] > 0
-    metrics.add(p.category, predicted)
-    etalon_metrics.add(p.category, etalon_predicted)
+print("\nOur metrics")
+print("Accuracy = %f" % our_metrics.accuracy())
+print("Precision = %f" % our_metrics.precision())
+print("Recall = %f" % our_metrics.recall())
+print("F measure = %f" % our_metrics.f_measure())
 
-print("Accuracy = %f" % metrics.accuracy())
-print("Precision = %f" % metrics.precision())
-print("Recall = %f" % metrics.recall())
-
-print("Accuracy = %f" % etalon_metrics.accuracy())
-print("Precision = %f" % etalon_metrics.precision())
-print("Recall = %f" % etalon_metrics.recall())
+print("\nSkLearn metrics")
+print("Accuracy = %f" % sklearn_metrics.accuracy())
+print("Precision = %f" % sklearn_metrics.precision())
+print("Recall = %f" % sklearn_metrics.recall())
+print("F measure = %f" % sklearn_metrics.f_measure())
