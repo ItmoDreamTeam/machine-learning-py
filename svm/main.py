@@ -8,8 +8,8 @@ from classification.kNN import Metrics
 from classification.kNN import read_dataset
 
 # Variables' ranges
-X_FROM, X_TO = -0.1, 1.5
-Y_FROM, Y_TO = -0.1, 1.5
+X_FROM, X_TO = -0.1, 1.3
+Y_FROM, Y_TO = -0.1, 1.3
 
 
 def plot_points(points, title):
@@ -17,6 +17,20 @@ def plot_points(points, title):
     for point in points:
         plt.plot(point.x, point.y, "xr" if point.category else ".b")
     plt.show()
+
+
+def print_results(w, b, title):
+    print("\n %s" % title)
+    print("w = %s" % w.flatten())
+    print("b = %f" % b[0])
+
+
+def print_metrics(metrics, title):
+    print("\n %s" % title)
+    print("Accuracy = %f" % metrics.accuracy())
+    print("Precision = %f" % metrics.precision())
+    print("Recall = %f" % metrics.recall())
+    print("F measure = %f" % metrics.f_measure())
 
 
 # Read dataset
@@ -52,40 +66,12 @@ alphas = np.array(sol['x'])
 w = ((y * alphas).T @ X).reshape(-1, 1)
 S = (alphas > 1e-4).flatten()
 b = y[S] - np.dot(X[S], w)
-
-print("\nResults")
-# print('Alphas = ', alphas[alphas > 1e-4])
-print('w = ', w.flatten())
-print('b = ', b[0])
-
-# Visualize results
-plt.figure(figsize=(10, 10))
-
-# Points
-for point in points:
-    plt.plot(point.x, point.y, "xr" if point.category else ".b")
-
-# Separating line
-x1 = np.linspace(X_FROM, X_TO)
-plt.plot(x1, - w[0] / w[1] * x1 - b[0] / w[1], color='darkblue')
-
-plt.xlim(X_FROM, X_TO)
-plt.ylim(Y_FROM, Y_TO)
-plt.axvline(0, color='black')
-plt.axhline(0, color='black')
-plt.show()
+print_results(w, b, "Our results")
 
 # Compare with SkLearn
 svc = SVC(C=C, kernel='linear')
 svc.fit(X, y.ravel())
-
-print("\nSkLearn")
-print('w = ', svc.coef_)
-print('b = ', svc.intercept_)
-# print('Indices of support vectors = ', svc.support_)
-# print('Support vectors = ', svc.support_vectors_)
-# print('Number of support vectors for each class = ', svc.n_support_)
-# print('Coefficients of the support vector in the decision function = ', np.abs(svc.dual_coef_))
+print_results(svc.coef_, svc.intercept_, "SkLearn results")
 
 # Calculate metrics
 our_metrics = Metrics()
@@ -95,15 +81,23 @@ for index, point in enumerate(points):
     our_prediction = point.x * w[0] + point.y * w[1] + b[0] > 0
     our_metrics.add(point.category, our_prediction)
     sklearn_metrics.add(point.category, sklearn_prediction[index])
+print_metrics(our_metrics, "Our metrics")
+print_metrics(sklearn_metrics, "SkLearn metrics")
 
-print("\nOur metrics")
-print("Accuracy = %f" % our_metrics.accuracy())
-print("Precision = %f" % our_metrics.precision())
-print("Recall = %f" % our_metrics.recall())
-print("F measure = %f" % our_metrics.f_measure())
+# Visualize results
+plt.figure(figsize=(10, 10))
 
-print("\nSkLearn metrics")
-print("Accuracy = %f" % sklearn_metrics.accuracy())
-print("Precision = %f" % sklearn_metrics.precision())
-print("Recall = %f" % sklearn_metrics.recall())
-print("F measure = %f" % sklearn_metrics.f_measure())
+# Points
+for point in points:
+    plt.plot(point.x, point.y, "xr" if point.category else ".b")
+
+# Separating lines
+xs = np.linspace(X_FROM, X_TO)
+plt.plot(xs, - w[0] / w[1] * xs - b[0] / w[1], color='green')
+plt.plot(xs, - svc.coef_[0][0] / svc.coef_[0][1] * xs - svc.intercept_[0] / svc.coef_[0][1], color='magenta')
+
+plt.xlim(X_FROM, X_TO)
+plt.ylim(Y_FROM, Y_TO)
+plt.axvline(0, color='black')
+plt.axhline(0, color='black')
+plt.show()
