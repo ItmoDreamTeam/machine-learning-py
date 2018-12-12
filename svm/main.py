@@ -27,6 +27,12 @@ def print_results(w, b, title):
 
 def print_metrics(metrics, title):
     print("\n %s" % title)
+    print("-------------------------------------------------------------")
+    print("|                 | Predicted positive | Predicted negative |")
+    print("|-----------------|--------------------|--------------------|")
+    print("| Actual positive | %18d | %18d |" % (metrics.true_positive(), metrics.false_negative()))
+    print("| Actual negative | %18d | %18d |" % (metrics.false_positive(), metrics.true_negative()))
+    print("-------------------------------------------------------------")
     print("Accuracy = %f" % metrics.accuracy())
     print("Precision = %f" % metrics.precision())
     print("Recall = %f" % metrics.recall())
