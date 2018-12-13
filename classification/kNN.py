@@ -96,7 +96,7 @@ class Metrics:
         return str(self)
 
 
-def read_dataset(filename: str, shuffle: bool = True) -> [Point]:
+def read_dataset(filename: str, shuffle: bool = False) -> [Point]:
     points = []
     with open(filename) as dataset_file:
         reader = csv.DictReader(dataset_file, fieldnames=('X', 'Y', 'Class'))
@@ -139,8 +139,7 @@ def categorize_all(points: [Point], batch_count: int, k: int) -> Metrics:
     return metrics
 
 
-def train(input_filename) -> Metrics:
-    points = read_dataset(input_filename)
+def train(points: [Point]) -> Metrics:
     max_f_measure = 0
     best_metrics = None
     for k in range(1, len(points)):
@@ -157,4 +156,5 @@ def train(input_filename) -> Metrics:
 
 
 if __name__ == '__main__':
-    train("chips1.csv")
+    points = read_dataset("chips1.csv")
+    train(points)

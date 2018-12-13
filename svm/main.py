@@ -4,6 +4,7 @@ from sklearn.svm import SVC
 from cvxopt import matrix as cvxopt_matrix
 from cvxopt import solvers as cvxopt_solvers
 
+from classification.kNN import Point
 from classification.kNN import Metrics
 from classification.kNN import read_dataset
 
@@ -107,3 +108,11 @@ plt.ylim(Y_FROM, Y_TO)
 plt.axvline(0, color='black')
 plt.axhline(0, color='black')
 plt.show()
+
+# Wilkerson
+from classification.kNN import train
+from scipy.stats import wilcoxon
+
+knn_metrics = train(points)
+print("kNN size", len(knn_metrics.margins()))
+print("SVM size", len(our_metrics.margins()))
