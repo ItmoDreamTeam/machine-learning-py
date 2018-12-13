@@ -1,6 +1,5 @@
 import numpy as np
 from matplotlib import pyplot as plt
-from sklearn.svm import SVC
 from cvxopt import matrix as cvxopt_matrix
 from cvxopt import solvers as cvxopt_solvers
 
@@ -8,22 +7,12 @@ from classification.kNN import Point
 from classification.kNN import Metrics
 from classification.kNN import read_dataset
 
-# Variables' ranges
-X_FROM, X_TO = -0.1, 1.3
-Y_FROM, Y_TO = -0.1, 1.3
-
 
 def plot_points(points, title):
     plt.title(title)
     for point in points:
         plt.plot(point.x, point.y, "xr" if point.category else ".b")
     plt.show()
-
-
-def print_results(w, b, title):
-    print("\n %s" % title)
-    print("w = %s" % w.flatten())
-    print("b = %f" % b[0])
 
 
 def print_metrics(metrics, title):
@@ -40,79 +29,101 @@ def print_metrics(metrics, title):
     print("F measure = %f" % metrics.f_measure())
 
 
+def sum_metrics(metrics: [Metrics]) -> Metrics:
+    metric = Metrics()
+    for m in metrics:
+        metric += m
+    return metric
+
+
+# Kernel
+def kernel(x1, x2):
+    def poly_kernel(x1, x2):
+        return (1 + np.dot(x1, x2)) ** 2
+
+    def rbf_kernel(x1, x2):
+        distance = np.sqrt(np.sum((x1 - x2) ** 2))
+        return np.exp(-(distance ** 2 / 2))
+
+    # return poly_kernel(x1, x2)
+    return rbf_kernel(x1, x2)
+
+
+def train(X, y, C=10):
+    n_samples, n_features = X.shape
+    H = np.zeros((n_samples, n_samples))
+    for i in range(n_samples):
+        for j in range(n_samples):
+            H[i, j] = kernel(X[i], X[j])
+
+    P = cvxopt_matrix(np.outer(y, y) * H, tc='d')
+    q = cvxopt_matrix(np.ones(n_samples) * -1)
+    A = cvxopt_matrix(y, (1, n_samples), tc='d')
+    b = cvxopt_matrix(0.0, tc='d')
+    G_max = np.identity(n_samples) * -1
+    G_min = np.identity(n_samples)
+    G = cvxopt_matrix(np.vstack((G_max, G_min)))
+    h_max = cvxopt_matrix(np.zeros(n_samples))
+    h_min = cvxopt_matrix(np.ones(n_samples) * C)
+    h = cvxopt_matrix(np.vstack((h_max, h_min)))
+
+    solution = cvxopt_solvers.qp(P, q, G, h, A, b)
+    lm = np.ravel(solution['x'])
+    idx = lm > 1e-5
+    ind = np.arange(len(lm))[idx]
+    lagr_multipliers = lm[idx]
+    sv = X[idx]
+    sv_labels = y[idx]
+    bias = 0
+    for n in range(len(lagr_multipliers)):
+        bias += sv_labels[n]
+        bias -= np.sum(lagr_multipliers * sv_labels * H[ind[n], idx])
+    bias /= len(lagr_multipliers)
+    return lagr_multipliers, sv, sv_labels, bias
+
+
+def predict(X, lagr_multipliers, sv, sv_labels, bias) -> bool:
+    y_pred = np.zeros(len(X))
+    for i in range(len(X)):
+        prediction = 0
+        for lagr_multipliers, sv_labels, sv in zip(lagr_multipliers, sv_labels, sv):
+            prediction += lagr_multipliers * sv_labels * kernel(X[i], sv)
+        y_pred[i] = prediction
+    return np.sign(y_pred + bias) > 0
+
+
+def categorize_batch(train_batch: [Point], test_points: [Point]) -> Metrics:
+    # Split to X and y
+    X = np.array([[point.x, point.y] for point in train_batch])
+    y = np.array([1 if point.category else -1 for point in train_batch])
+
+    # Train
+    lagr_multipliers, sv, sv_labels, bias = train(X, y)
+
+    # Calculate metrics
+    metrics = Metrics()
+    for test_point in test_points:
+        computed_category = predict([[test_point.x, test_point.y]], lagr_multipliers, sv, sv_labels, bias)
+        metrics.add(test_point.category, computed_category)
+    return metrics
+
+
+def categorize_all(points: [Point], batch_count: int) -> [Metrics]:
+    metrics = []
+    batch_size = int(len(points) / batch_count)
+    for i in range(batch_count):
+        start = i * batch_size
+        end = (i + 1) * batch_size
+        test = points[start:end]
+        train = points[:start] + points[end:]
+        metrics.append(categorize_batch(train, test))
+    return metrics
+
+
 # Read dataset
-points = read_dataset("../classification/chips1.csv")
-plot_points(points, "Original data")
+points = read_dataset("../classification/chips1.csv", shuffle=True)
+# plot_points(points, "Original data")
 
-# Transform
-for point in points:
-    point.x **= 2
-    point.y **= 2
-plot_points(points, "Squared data")
-
-# Split to X and y
-X = np.array([[point.x, point.y] for point in points])
-y = np.array([1 if point.category else -1 for point in points])
-
-# Prepare solver
-C = 10
-elements_number = X.shape[0]
-y = y.reshape(-1, 1) * 1.
-X_dash = y * X
-H = np.dot(X_dash, X_dash.T) * 1.
-P = cvxopt_matrix(H)
-q = cvxopt_matrix(-np.ones((elements_number, 1)))
-G = cvxopt_matrix(np.vstack((np.eye(elements_number) * -1, np.eye(elements_number))))
-h = cvxopt_matrix(np.hstack((np.zeros(elements_number), np.ones(elements_number) * C)))
-A = cvxopt_matrix(y.reshape(1, -1))
-b = cvxopt_matrix(np.zeros(1))
-
-# Run solver
-sol = cvxopt_solvers.qp(P, q, G, h, A, b)
-alphas = np.array(sol['x'])
-w = ((y * alphas).T @ X).reshape(-1, 1)
-S = (alphas > 1e-4).flatten()
-b = y[S] - np.dot(X[S], w)
-print_results(w, b, "Our results")
-
-# Compare with SkLearn
-svc = SVC(C=C, kernel='linear')
-svc.fit(X, y.ravel())
-print_results(svc.coef_, svc.intercept_, "SkLearn results")
-
-# Calculate metrics
-our_metrics = Metrics()
-sklearn_metrics = Metrics()
-sklearn_prediction = [e > 0 for e in svc.predict(X)]
-for index, point in enumerate(points):
-    our_prediction = point.x * w[0] + point.y * w[1] + b[0] > 0
-    our_metrics.add(point.category, our_prediction)
-    sklearn_metrics.add(point.category, sklearn_prediction[index])
-print_metrics(our_metrics, "Our metrics")
-print_metrics(sklearn_metrics, "SkLearn metrics")
-
-# Visualize results
-plt.figure(figsize=(10, 10))
-
-# Points
-for point in points:
-    plt.plot(point.x, point.y, "xr" if point.category else ".b")
-
-# Separating lines
-xs = np.linspace(X_FROM, X_TO)
-plt.plot(xs, - w[0] / w[1] * xs - b[0] / w[1], color='green')
-plt.plot(xs, - svc.coef_[0][0] / svc.coef_[0][1] * xs - svc.intercept_[0] / svc.coef_[0][1], color='magenta')
-
-plt.xlim(X_FROM, X_TO)
-plt.ylim(Y_FROM, Y_TO)
-plt.axvline(0, color='black')
-plt.axhline(0, color='black')
-plt.show()
-
-# Wilkerson
-from classification.kNN import train
-from scipy.stats import wilcoxon
-
-knn_metrics = train(points)
-print("kNN size", len(knn_metrics.margins()))
-print("SVM size", len(our_metrics.margins()))
+# Solve
+metrics_list = categorize_all(points, batch_count=10)
+print_metrics(sum_metrics(metrics_list), "Metrics:")
