@@ -127,15 +127,15 @@ def categorize_batch(train_batch: [Point], test_points: [Point], k: int) -> Metr
     return metrics
 
 
-def categorize_all(points: [Point], batch_count: int, k: int) -> [Metrics]:
-    metrics = []
+def categorize_all(points: [Point], batch_count: int, k: int) -> Metrics:
+    metrics = Metrics()
     batch_size = int(len(points) / batch_count)
     for i in range(batch_count):
         start = i * batch_size
         end = (i + 1) * batch_size
         test = points[start:end]
         train = points[:start] + points[end:]
-        metrics.append(categorize_batch(train, test, k))
+        metrics += categorize_batch(train, test, k)
     return metrics
 
 
