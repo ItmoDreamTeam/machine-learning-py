@@ -156,5 +156,5 @@ def train(points: [Point]) -> Metrics:
 
 
 if __name__ == '__main__':
-    points = read_dataset("chips1.csv")
+    points = read_dataset("chips1.csv", shuffle=True)
     train(points)
