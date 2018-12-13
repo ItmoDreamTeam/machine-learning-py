@@ -40,12 +40,18 @@ class Metrics:
                / len(self.true_values)
 
     def precision(self) -> float:
+        if self.true_positive() + self.false_positive() == 0:
+            return -1
         return self.true_positive() / (self.true_positive() + self.false_positive())
 
     def recall(self):
+        if self.true_positive() + self.false_negative() == 0:
+            return -1
         return self.true_positive() / (self.true_positive() + self.false_negative())
 
     def f_measure(self):
+        if self.precision() + self.recall() == 0:
+            return -1
         return 2 * self.precision() * self.recall() / (self.precision() + self.recall())
 
     def true_positive(self) -> int:
@@ -90,12 +96,14 @@ class Metrics:
         return str(self)
 
 
-def read_dataset(filename: str) -> [Point]:
+def read_dataset(filename: str, shuffle: bool = True) -> [Point]:
     points = []
     with open(filename) as dataset_file:
         reader = csv.DictReader(dataset_file, fieldnames=('X', 'Y', 'Class'))
         for point in reader:
             points.append(Point(point["X"], point["Y"], point["Class"] == "1"))
+    if shuffle:
+        random.shuffle(points)
     return points
 
 
@@ -131,10 +139,10 @@ def categorize_all(points: [Point], batch_count: int, k: int) -> Metrics:
     return metrics
 
 
-if __name__ == '__main__':
-    points = read_dataset("chips1.csv")
-    random.shuffle(points)
+def train(input_filename) -> Metrics:
+    points = read_dataset(input_filename)
     max_f_measure = 0
+    best_metrics = None
     for k in range(1, len(points)):
         for batch_count in range(2, len(points) - 1):
             metrics = categorize_all(points, batch_count, k)
@@ -143,4 +151,10 @@ if __name__ == '__main__':
                 print("%.1f%%" % (100 * (k + 1) / len(points)))
             if f_measure > max_f_measure:
                 max_f_measure = f_measure
+                best_metrics = metrics
                 print("k=%d, batch_count=%d, F=%f\n%s\n" % (k, batch_count, f_measure, metrics))
+    return best_metrics
+
+
+if __name__ == '__main__':
+    train("chips1.csv")
